@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CyberGuard prototype</title>
+<style>
+:root{--bg:#F8FBFE;--card:#fff;--tx:#0E2452;--tx2:#355275;--bd:#C9E0F2;--pu:#6A56DC;--te:#199699;--or:#EC7B5E;--rd:#97363E;--bl:#1355A8;--soft:#E9F8FE;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1630;--card:#122246;--tx:#EAF1FB;--tx2:#A9BDD8;--bd:#2a4172;--soft:#16294f;--rd:#F08A92;--pu:#9a8cf5;--te:#43c3c5;--or:#f2a28b;--bl:#6aa6f0}}
+:root[data-theme="dark"]{--bg:#0b1630;--card:#122246;--tx:#EAF1FB;--tx2:#A9BDD8;--bd:#2a4172;--soft:#16294f;--rd:#F08A92;--pu:#9a8cf5;--te:#43c3c5;--or:#f2a28b;--bl:#6aa6f0}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.w{max-width:980px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:26px;margin:0}h2{font-size:16px;margin:0 0 8px}
+.sub{color:var(--tx2);margin:4px 0 16px}
+.pipe{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:14px}
+.st{flex:0 0 auto;padding:6px 10px;border:1px solid var(--bd);border-radius:8px;background:var(--card);font-size:12px;color:var(--tx2);transition:.25s}
+.st.on{background:var(--bl);color:#fff;border-color:var(--bl)}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.tab{padding:9px 14px;border:1.5px solid var(--bd);background:var(--card);color:var(--tx);border-radius:10px;cursor:pointer;font:inherit;font-weight:600}
+.tab[aria-selected=true]{color:#fff;border-color:transparent}
+.tab[data-k=ph][aria-selected=true]{background:var(--pu)}.tab[data-k=im][aria-selected=true]{background:var(--te)}.tab[data-k=at][aria-selected=true]{background:var(--or);color:#3a1a10}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:760px){.g{grid-template-columns:1fr}}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px}
+label{display:block;font-size:12px;color:var(--tx2);margin:10px 0 4px}
+input,textarea,select{width:100%;padding:9px 10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit;font-size:14px}
+textarea{min-height:96px;resize:vertical}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+button.b{padding:9px 14px;border-radius:8px;border:0;background:var(--bl);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+button.s{background:transparent;color:var(--tx);border:1px solid var(--bd)}
+.score{display:flex;align-items:center;gap:14px}
+.num{font-size:44px;font-weight:700;line-height:1}
+.pill{display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700;color:#fff}
+.bar{height:8px;background:var(--soft);border-radius:4px;overflow:hidden;margin:10px 0}
+.bar i{display:block;height:100%;width:0;transition:width .6s}
+ul{margin:6px 0;padding:0;list-style:none}
+li{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:14px}
+li b{color:var(--rd);white-space:nowrap}
+.mt{margin-top:14px}.sm{font-size:12px;color:var(--tx2)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd)}
+.empty{color:var(--tx2);font-size:14px}
+</style></head>
+<body><div class="w">
+<h1>CyberGuard</h1>
+<p class="sub">AI-assisted threat detection prototype: detect, score, explain, recommend.</p>
+<div class="pipe" id="pipe"></div>
+<div class="tabs" role="tablist">
+<button class="tab" role="tab" data-k="ph" aria-selected="true">Phishing</button>
+<button class="tab" role="tab" data-k="im" aria-selected="false">Impersonation</button>
+<button class="tab" role="tab" data-k="at" aria-selected="false">Account takeover</button>
+</div>
+<div class="g">
+<div class="c" id="inp"></div>
+<div class="c" id="out"><h2>Result</h2><p class="empty">Pick a sample or type your own, then press Analyze.</p></div>
+</div>
+<div class="c mt"><h2>Incident log (this session)</h2><table><thead><tr><th>Time</th><th>Scenario</th><th>Threat</th><th>Risk</th></tr></thead><tbody id="log"><tr><td colspan="4" class="empty">No analyses yet.</td></tr></tbody></table></div>
+<p class="sm mt">Prototype note: scoring here is a rule-based simulation that runs in your browser. The real system would use DistilBERT, logistic regression and Isolation Forest as in the flowchart. Responses are recommendations only.</p>
+</div>
+<script>
+var $=function(i){return document.getElementById(i)};
+var STAGES=["Input","Analysis","Threat correlation","Risk engine","Decision","Explanation","Response","Storage"];
+$("pipe").innerHTML=STAGES.map(function(s,i){return '<div class="st" id="s'+i+'">'+s+'</div>'}).join("");
+var TRUST=["paypal.com","google.com","microsoft.com","amazon.in","college.edu","sbi.co.in"];
+var SAMPLES={
+ph:{msg:"URGENT: Your account will be suspended. Verify your password immediately: click the link now.",url:"http://paypa1-secure-login.xyz/verify?id=88",snd:"support@paypa1.com"},
+im:{name:"College Principal",email:"principal.office@gmail.com",official:"college.edu",msg:"Hello, this is your principal. Send the examination database immediately. Do not tell anyone, it is confidential."},
+at:{logs:"10:02 login India known\n10:04 login India known\n10:06 login Germany known\n10:07 login Germany new-device\n10:08 failed 17\n10:09 api privileged\n10:10 download 850MB"}};
+var cur="ph",LOG=[];
+function lev(a,b){var d=[],i,j;for(i=0;i<=a.length;i++){d[i]=[i]}for(j=1;j<=b.length;j++)d[0][j]=j;for(i=1;i<=a.length;i++)for(j=1;j<=b.length;j++)d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]==b[j-1]?0:1));return d[a.length][b.length]}
+function host(u){var m=String(u).match(/^(?:[a-z]+:\/\/)?(?:[^@\/]*@)?([^\/:?#]+)/i);return m?m[1].toLowerCase():""}
+function dom(e){var p=String(e).split("@");return (p[1]||p[0]).toLowerCase().trim()}
+function near(d){var best=null;TRUST.forEach(function(t){var x=lev(d,t);if(x>0&&x<=2&&(!best||x<best.x))best={t:t,x:x}});return best}
+function has(s,w){return w.filter(function(k){return s.toLowerCase().indexOf(k)>-1})}
+function form(k){
+var s=SAMPLES[k],h="";
+if(k=="ph")h='<h2>Message, URL and sender</h2><label>Message text</label><textarea id="f1"></textarea><label>URL in message</label><input id="f2"><label>Sender email</label><input id="f3">';
+if(k=="im")h='<h2>Message claiming to be someone</h2><label>Claimed identity</label><input id="f1"><label>Sender email</label><input id="f2"><label>Official domain of that organisation</label><input id="f3"><label>Message text</label><textarea id="f4"></textarea>';
+if(k=="at")h='<h2>Login and activity logs</h2><label>One event per line: time, event, detail</label><textarea id="f1" style="min-height:170px;font-family:monospace;font-size:13px"></textarea><p class="sm">Events: login Country known|new-device, failed N, api privileged, download NMB</p>';
+$("inp").innerHTML=h+'<div class="row"><button class="b" id="go">Analyze</button><button class="b s" id="smp">Load sample</button><button class="b s" id="clr">Clear</button></div>';
+function fill(v){if(k=="ph"){$("f1").value=v.msg;$("f2").value=v.url;$("f3").value=v.snd}if(k=="im"){$("f1").value=v.name;$("f2").value=v.email;$("f3").value=v.official;$("f4").value=v.msg}if(k=="at")$("f1").value=v.logs}
+fill(s);
+$("smp").onclick=function(){fill(s)};
+$("clr").onclick=function(){document.querySelectorAll("#inp input,#inp textarea").forEach(function(e){e.value=""})};
+$("go").onclick=function(){run(k)};
+}
+function analyse(k){
+var E=[],resp=[],T="";
+function add(l,p){E.push([l,p])}
+if(k=="ph"){
+var m=$("f1").value,u=$("f2").value,sn=$("f3").value;
+var urg=has(m,["urgent","immediately","suspend","now","expire","24 hours"]),cred=has(m,["password","verify","otp","login","pin","bank","confirm"]);
+if(urg.length)add("Urgent language: "+urg.slice(0,3).join(", "),Math.min(15,urg.length*6));
+if(cred.length)add("Credential request: "+cred.slice(0,3).join(", "),Math.min(20,cred.length*8));
+if(u){var h=host(u);
+if(!/^https:/i.test(u))add("URL is not HTTPS",6);
+if(/^\d+\.\d+\.\d+\.\d+$/.test(h))add("IP address used as host",15);
+if(/\.(xyz|top|tk|ru|click|zip)$/.test(h))add("Suspicious TLD",12);
+if(h.split("-").length>2||h.length>30)add("Long or hyphen-heavy domain",8);
+if(h.split(".").length>3)add("Many subdomains",8);
+var n=near(h.split(".").slice(-2).join("."));if(!n&&/paypa1|g00gle|micr0soft|amaz0n/.test(h))n={t:"a trusted brand"};
+if(n)add("Look-alike URL of "+n.t,18);}
+if(sn){var d=dom(sn),n2=near(d)||(/paypa1|g00gle|micr0soft|amaz0n/.test(d)?{t:"a trusted brand"}:null);
+if(n2)add("Sender domain imitates "+n2.t,15);
+if(u&&host(u)!=d&&!host(u).endsWith("."+d)&&d)add("Sender domain differs from link domain",10);}
+T="Phishing";}
+if(k=="im"){
+var nm=$("f1").value,em=$("f2").value,of=$("f3").value.toLowerCase().trim(),ms=$("f4").value,d3=dom(em);
+if(nm&&of&&d3!=of)add("Sender domain "+d3+" does not match official "+of,25);
+if(/@(gmail|yahoo|outlook|hotmail)\./i.test(em)&&nm)add("Authority figure using a free email provider",15);
+var rq=has(ms,["database","transfer","gift card","otp","password","send me","payment","wire"]);
+if(rq.length)add("Unusual request: "+rq.slice(0,2).join(", "),20);
+var ur=has(ms,["urgent","immediately","right now","asap"]);if(ur.length)add("Urgency detected",12);
+var sc=has(ms,["do not tell","confidential","secret","don't tell"]);if(sc.length)add("Secrecy pressure",12);
+if(/principal|ceo|director|dean|manager|bank/i.test(nm+" "+ms))add("Claims authority role",8);
+T="Digital impersonation";}
+if(k=="at"){
+var L=$("f1").value.split("\n"),logins=[],fails=0,priv=0,dl=0,newdev=0,i;
+L.forEach(function(l){var t=l.trim().match(/^(\d{1,2}):(\d{2})\s+(\w+)\s*(.*)$/);if(!t)return;var min=+t[1]*60+ +t[2],ev=t[3].toLowerCase(),d=t[4].trim();
+if(ev=="login"){var p=d.split(/\s+/);logins.push({m:min,c:p[0]});if(/new/i.test(d))newdev++}
+if(ev=="failed")fails+=parseInt(d)||1;
+if(ev=="api"&&/priv/i.test(d))priv++;
+if(ev=="download")dl+=parseInt(d)||0;});
+for(i=1;i<logins.length;i++)if(logins[i].c!=logins[i-1].c&&logins[i].m-logins[i-1].m<=60){add("Impossible travel: "+logins[i-1].c+" to "+logins[i].c+" in "+(logins[i].m-logins[i-1].m)+" min",25);break}
+if(newdev)add("Unknown device",15);
+if(fails>=5)add(fails+" failed login attempts",Math.min(20,10+fails/2));
+if(priv)add("Privileged API request",15);
+if(dl>=300)add("Abnormal data download ("+dl+" MB)",15);
+T="Account takeover";}
+var tot=Math.min(100,Math.round(E.reduce(function(a,e){return a+e[1]},0)));
+var sev=tot<=20?["Safe","#1355A8"]:tot<=40?["Low","#199699"]:tot<=60?["Medium","#b8860b"]:tot<=80?["High","#d9622f"]:["Critical","#97363E"];
+if(tot<=20)T="No threat detected";
+if(tot>20){
+if(k=="ph")resp=["Warn the user","Block the suspicious URL","Quarantine the message","Notify administrator"];
+if(k=="im")resp=["Require identity verification","Do not act on the request","Verify via official phone or email","Notify administrator"];
+if(k=="at")resp=["Revoke active session","Require MFA","Block the new device","Notify SOC and create incident"];}
+var why=E.length?"CyberGuard flagged this because "+E.slice(0,3).map(function(e){return e[0].charAt(0).toLowerCase()+e[0].slice(1)}).join("; ")+". Scores come from the listed evidence, not a hidden guess.":"No risk indicators were found in the input.";
+return{T:T,tot:tot,sev:sev,E:E,resp:resp,why:why,k:k}}
+function esc(s){var d=document.createElement("div");d.textContent=s;return d.innerHTML}
+function run(k){
+var r=analyse(k),i=0;
+$("out").innerHTML='<h2>Result</h2><p class="empty">Running pipeline...</p>';
+function step(){document.querySelectorAll(".st").forEach(function(e,j){e.classList.toggle("on",j==i)});i++;if(i<=STAGES.length)setTimeout(step,170);else{document.querySelectorAll(".st").forEach(function(e){e.classList.remove("on")});show(r)}}
+step()}
+function show(r){
+var conf=r.k=="im"?'<p class="sm">Authenticity confidence: '+(100-r.tot)+'%</p>':"";
+$("out").innerHTML='<h2>Result</h2><div class="score"><div class="num" style="color:'+r.sev[1]+'">'+r.tot+'</div><div><span class="pill" style="background:'+r.sev[1]+'">'+r.sev[0]+'</span><div><b>'+esc(r.T)+'</b></div></div></div><div class="bar"><i style="background:'+r.sev[1]+'" id="bf"></i></div>'+conf+
+'<h2 class="mt">Evidence</h2>'+(r.E.length?'<ul>'+r.E.map(function(e){return"<li><span>"+esc(e[0])+"</span><b>+"+Math.round(e[1])+"</b></li>"}).join("")+"</ul>":'<p class="empty">None.</p>')+
+'<h2 class="mt">Explanation</h2><p>'+esc(r.why)+'</p>'+
+(r.resp.length?'<h2 class="mt">Recommended response</h2><ul>'+r.resp.map(function(x){return"<li><span>"+esc(x)+"</span></li>"}).join("")+"</ul>":"");
+setTimeout(function(){$("bf").style.width=r.tot+"%"},30);
+var n={ph:"Phishing",im:"Impersonation",at:"Account takeover"}[r.k];
+LOG.unshift([new Date().toLocaleTimeString(),n,r.T,r.tot+" ("+r.sev[0]+")"]);
+$("log").innerHTML=LOG.slice(0,8).map(function(x){return"<tr>"+x.map(function(c){return"<td>"+esc(c)+"</td>"}).join("")+"</tr>"}).join("")}
+document.querySelectorAll(".tab").forEach(function(t){t.onclick=function(){cur=t.dataset.k;document.querySelectorAll(".tab").forEach(function(x){x.setAttribute("aria-selected",x==t)});form(cur);$("out").innerHTML='<h2>Result</h2><p class="empty">Pick a sample or type your own, then press Analyze.</p>'}});
+form("ph");
+</script></body></html>
